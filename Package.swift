@@ -22,7 +22,9 @@ import class Foundation.ProcessInfo
 let package = Package(
     name: "onnxruntime",
     platforms: [.iOS(.v13),
-                .macOS(.v11)],
+                .macOS(.v11),
+                .watchOS(.v10)
+               ],
     products: [
         .library(name: "onnxruntime",
                  type: .static,
