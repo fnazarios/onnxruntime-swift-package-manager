@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name             = 'onnxruntime'
+  s.name             = 'onnxruntime-swift'
   s.version          = '1.20.0'
   s.summary          = 'ONNX Runtime Objective-C API for iOS'
   s.description      = <<-DESC
