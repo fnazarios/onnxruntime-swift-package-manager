@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name             = 'onnxruntime-swift'
+  s.name             = 'onnxruntime'
   s.version          = '1.20.0'
   s.summary          = 'ONNX Runtime Objective-C API for iOS'
   s.description      = <<-DESC
@@ -13,6 +13,9 @@ Pod::Spec.new do |s|
   s.source           = { :git => 'https://github.com/microsoft/onnxruntime-swift-package-manager.git', :tag => s.version.to_s }
 
   s.ios.deployment_target = '13.0'
+
+  # Use the same module name as SPM for compatibility
+  s.module_name = 'OnnxRuntimeBindings'
 
   s.source_files = 'objectivec/**/*.{h,m,mm}'
   s.public_header_files = 'objectivec/include/*.h'
@@ -34,10 +37,17 @@ Pod::Spec.new do |s|
 
   s.requires_arc = true
   s.library = 'c++'
+
+  # Vendored xcframework (downloaded via prepare_command, matching Package.swift approach)
+  # Renamed to onnxruntime_swift.xcframework to avoid conflicts with other pods
+  s.vendored_frameworks = 'onnxruntime_swift.xcframework'
+  s.preserve_paths = 'onnxruntime_swift.xcframework', 'Headers'
+
   s.pod_target_xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'CLANG_CXX_LIBRARY' => 'libc++',
-    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SPM_BUILD=1'
+    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SPM_BUILD=1',
+    'HEADER_SEARCH_PATHS' => '$(inherited) "${PODS_ROOT}/onnxruntime-swift/Headers"'
   }
 
   s.user_target_xcconfig = {
@@ -45,9 +55,46 @@ Pod::Spec.new do |s|
     'CLANG_CXX_LIBRARY' => 'libc++'
   }
 
-  # Depend on the official ONNX Runtime C pod instead of vendoring the xcframework
-  # This avoids conflicts if other pods also use onnxruntime.xcframework
-  s.dependency 'onnxruntime-c', '~> 1.20.0'
-
   s.frameworks = 'Foundation'
+
+  # Download the xcframework from Microsoft (same as Package.swift binaryTarget)
+  # URL: https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.20.0.zip
+  # Checksum: 50891a8aadd17d4811acb05ed151ba6c394129bb3ab14e843b0fc83a48d450ff
+  s.prepare_command = <<-CMD
+    set -e
+    ONNXRUNTIME_VERSION="1.20.0"
+    XCFRAMEWORK_URL="https://download.onnxruntime.ai/pod-archive-onnxruntime-c-${ONNXRUNTIME_VERSION}.zip"
+    XCFRAMEWORK_ZIP="pod-archive-onnxruntime-c-${ONNXRUNTIME_VERSION}.zip"
+    EXPECTED_CHECKSUM="50891a8aadd17d4811acb05ed151ba6c394129bb3ab14e843b0fc83a48d450ff"
+
+    # Use a unique name to avoid conflicts with other pods that vendor onnxruntime.xcframework
+    RENAMED_XCFRAMEWORK="onnxruntime_swift.xcframework"
+
+    if [ ! -d "${RENAMED_XCFRAMEWORK}" ]; then
+      echo "Downloading ONNX Runtime xcframework v${ONNXRUNTIME_VERSION}..."
+      curl -L -o "${XCFRAMEWORK_ZIP}" "${XCFRAMEWORK_URL}"
+
+      echo "Verifying checksum..."
+      ACTUAL_CHECKSUM=$(shasum -a 256 "${XCFRAMEWORK_ZIP}" | awk '{print $1}')
+      if [ "${ACTUAL_CHECKSUM}" != "${EXPECTED_CHECKSUM}" ]; then
+        echo "ERROR: Checksum verification failed!"
+        echo "Expected: ${EXPECTED_CHECKSUM}"
+        echo "Actual: ${ACTUAL_CHECKSUM}"
+        rm -f "${XCFRAMEWORK_ZIP}"
+        exit 1
+      fi
+      echo "Checksum verified."
+
+      echo "Extracting xcframework..."
+      unzip -q -o "${XCFRAMEWORK_ZIP}"
+      rm -f "${XCFRAMEWORK_ZIP}"
+
+      echo "Renaming xcframework to avoid conflicts..."
+      mv onnxruntime.xcframework "${RENAMED_XCFRAMEWORK}"
+
+      echo "ONNX Runtime xcframework ready."
+    else
+      echo "ONNX Runtime xcframework already present."
+    fi
+  CMD
 end
